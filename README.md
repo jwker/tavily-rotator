@@ -1,11 +1,11 @@
 # tavily-rotator
 
 <p align="center">
-  <img src="https://img.shields.io/pypi/v/tavily-rotator?style=flat-square" alt="PyPI version">
+  <img src="https://img.shields.io/pypi/v/tavily-rotator?style=flat-square&cacheSeconds=3600" alt="PyPI version">
   <img src="https://img.shields.io/badge/Python-3.10+-blue?style=flat-square&logo=python&logoColor=white" alt="Python 3.10+">
   <img src="https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square" alt="License MIT">
-  <img src="https://img.shields.io/pypi/dm/tavily-rotator?style=flat-square" alt="PyPI downloads">
-  <img src="https://img.shields.io/github/last-commit/jwker/tavily-rotator?style=flat-square" alt="Last commit">
+  <img src="https://img.shields.io/pypi/dm/tavily-rotator?style=flat-square&cacheSeconds=3600" alt="PyPI downloads">
+  <img src="https://img.shields.io/github/last-commit/jwker/tavily-rotator?style=flat-square&cacheSeconds=3600" alt="Last commit">
 </p>
 
 <p align="center">
