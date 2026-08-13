@@ -1,0 +1,26 @@
+name: release
+
+# 推 v* 标签时自动构建并发布到 PyPI(Trusted Publishing,无需 API token)
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  id-token: write   # PyPI OIDC 交换需要,不能省
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Build package
+        run: uv build
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
