@@ -1,0 +1,29 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "tavily-rotator"
+version = "0.1.0"
+description = "Usage-aware rotation across multiple Tavily API keys"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "jwker" }]
+keywords = ["tavily", "search", "api", "rotation", "rate-limit"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Topic :: Internet :: WWW/HTTP",
+]
+dependencies = [
+    "requests>=2.28",
+]
+
+[project.scripts]
+tavily-search = "tavily_rotator.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/jwker/tavily-rotator"
+Repository = "https://github.com/jwker/tavily-rotator"
