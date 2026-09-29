@@ -8,6 +8,7 @@
 - 线程安全:pick/记账在锁内,HTTP 搜索在锁外
 """
 
+import contextlib
 import json
 import os
 import threading
@@ -66,9 +67,18 @@ class TavilyRotator:
 
     def _save(self) -> None:
         self._data_file.parent.mkdir(parents=True, exist_ok=True)
-        tmp = self._data_file.with_name(self._data_file.name + ".tmp")
-        tmp.write_text(json.dumps(self._state, ensure_ascii=False, indent=2), encoding="utf-8")
-        os.replace(tmp, self._data_file)  # 原子替换,多进程并发写不会读到半个文件
+        # 临时文件带 pid+线程 id 唯一后缀:threading.Lock 只保护进程内线程,
+        # 多进程/同进程多实例并发写同一 data_file 时,固定 tmp 名会互相
+        # rename 走,导致 os.replace 报 [Errno 2] No such file or directory
+        tmp = self._data_file.with_name(
+            f"{self._data_file.name}.{os.getpid()}.{threading.get_ident()}.tmp"
+        )
+        try:
+            tmp.write_text(json.dumps(self._state, ensure_ascii=False, indent=2), encoding="utf-8")
+            os.replace(tmp, self._data_file)  # 原子替换,读侧不会读到半个文件
+        finally:
+            with contextlib.suppress(OSError):
+                tmp.unlink(missing_ok=True)  # 写失败/被并发抢走时不留垃圾 tmp
 
     def _limit_for(self, key: str) -> int:
         """单个 key 的配额上限(未单独指定时用兜底值)。"""
