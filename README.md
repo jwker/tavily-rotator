@@ -24,7 +24,7 @@
 - **全耗尽抢跑**:所有 key 都用完时,立即探测最早耗尽的 key
 - **状态持久化**:记录存在 `~/.tavily_rotator/tavily_usage.json`,重启不丢
 - **线程安全**:内部用锁保护状态,可安全并发调用
-- **CLI 命令行**(接入任意 agent 的示例见 [接入 LangChain](#接入-langchain))
+- **CLI 命令行**(接入任意 agent 的示例见 [接入 LangChain](#接入-langchain);更多可运行脚本见 [examples/](examples/))
 
 ## 安装
 
@@ -150,6 +150,21 @@ tavily-search "今天上海天气" --json
 ```
 
 删除该文件即可重置计数。
+
+## 示例
+
+[examples/](examples/) 目录提供了可直接运行的脚本,涵盖快速开始、多线程并发、独立实例构造、本地用量查看:
+
+| 文件 | 说明 |
+|---|---|
+| [basic_search.py](examples/basic_search.py) | 快速开始:`get_rotator()` 单例搜索 |
+| [concurrent_search.py](examples/concurrent_search.py) | 线程安全:多线程并发搜索,记账不串账 |
+| [custom_instance.py](examples/custom_instance.py) | 进阶:自定义状态文件与按 key 配额 |
+| [check_usage.py](examples/check_usage.py) | 查看本地用量账本(不发网络请求) |
+
+```bash
+python examples/basic_search.py   # 运行前先 export TAVILY_SEARCH_KEYS=...
+```
 
 ## 注意
 
