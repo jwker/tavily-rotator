@@ -6,4 +6,4 @@
 from .rotator import TavilyRotator, get_rotator, DEFAULT_DATA_FILE
 
 __all__ = ["TavilyRotator", "get_rotator", "DEFAULT_DATA_FILE"]
-__version__ = "0.1.0"
+__version__ = "0.1.1"
