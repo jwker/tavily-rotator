@@ -152,27 +152,25 @@ class TavilyRotator:
     # ---------------- 对外:搜索 ----------------
 
     def search(self, query: str, **kwargs) -> dict:
-        with self._lock:
-            self._lazy_probe_due()
-            key = self._pick_key()
+        tried: set[str] = set()
+        while len(tried) <= len(self._keys):  # 上限仅防御;每 key 一次即自然收敛
+            with self._lock:
+                self._lazy_probe_due()
+                try:
+                    key = self._pick_key()
+                except RuntimeError:
+                    raise RuntimeError("所有 Tavily key 配额均已耗尽") from None
+            tried.add(key)
 
-        data = self._do_search(key, query, **kwargs)
-        if data is not None:
-            return data
-
-        # 403:配额耗尽 → 标记,换下一个重试一次
-        with self._lock:
-            self._state["keys"][key]["exhausted"] = True
-            self._state["keys"][key]["last_probe_at"] = time.time()
-            self._save()
-            try:
-                nxt = self._pick_key()
-            except RuntimeError:
-                nxt = None
-        if nxt and nxt != key:
-            data = self._do_search(nxt, query, **kwargs)
+            data = self._do_search(key, query, **kwargs)
             if data is not None:
                 return data
+
+            # 403:配额耗尽 → 标记,下一轮换下一个 key,直到试穿候选池
+            with self._lock:
+                self._state["keys"][key]["exhausted"] = True
+                self._state["keys"][key]["last_probe_at"] = time.time()
+                self._save()
         raise RuntimeError("所有 Tavily key 配额均已耗尽")
 
     def _do_search(self, key: str, query: str, **kwargs) -> dict | None:

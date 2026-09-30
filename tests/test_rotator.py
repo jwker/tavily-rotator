@@ -247,6 +247,46 @@ class SearchLogicTest(unittest.TestCase):
         self.assertFalse(rot._state["keys"]["tvly-b"]["exhausted"])
         self.assertEqual(rot._state["keys"]["tvly-b"]["used"], 1)
 
+    def test_403_retries_exhaust_key_pool(self):
+        """403 后应遍历整个候选池,而不是只重试一次(旧实现 A、B 都 403 时不试 C)。"""
+        rot = TavilyRotator(keys=["tvly-a", "tvly-b", "tvly-c"], data_file=str(self.data_file))
+        payloads = [
+            _fake_response(403, {"detail": "quota exceeded"}),
+            _fake_response(403, {"detail": "quota exceeded"}),
+            _fake_response(200, {"results": [{"title": "third"}], "search_cost": 1}),
+        ]
+        with mock.patch("tavily_rotator.rotator.requests.post", side_effect=payloads):
+            data = rot.search("q")
+        self.assertEqual(data["results"][0]["title"], "third")
+        self.assertTrue(rot._state["keys"]["tvly-a"]["exhausted"])
+        self.assertTrue(rot._state["keys"]["tvly-b"]["exhausted"])
+        self.assertFalse(rot._state["keys"]["tvly-c"]["exhausted"])
+        self.assertEqual(rot._state["keys"]["tvly-c"]["used"], 1)
+
+    def test_all_403_raises_after_trying_every_key(self):
+        """全部 key 都 403 → 抛错,且每个 key 恰好被试一次。"""
+        keys = ["tvly-a", "tvly-b", "tvly-c"]
+        rot = TavilyRotator(keys=keys, data_file=str(self.data_file))
+        payloads = [_fake_response(403, {"detail": "quota exceeded"}) for _ in keys]
+        with mock.patch("tavily_rotator.rotator.requests.post", side_effect=payloads):
+            with self.assertRaisesRegex(RuntimeError, "均已耗尽"):
+                rot.search("q")
+        for k in keys:
+            self.assertTrue(rot._state["keys"][k]["exhausted"])
+
+    def test_each_key_tried_at_most_once_per_search(self):
+        """单次 search 内,同一 key 不会被重复尝试(403 标记后不再入池)。"""
+        rot = TavilyRotator(keys=["tvly-a", "tvly-b"], data_file=str(self.data_file))
+        payloads = [
+            _fake_response(403, {"detail": "quota exceeded"}),
+            _fake_response(403, {"detail": "quota exceeded"}),
+        ]
+        with mock.patch("tavily_rotator.rotator.requests.post", side_effect=payloads) as m:
+            with self.assertRaisesRegex(RuntimeError, "均已耗尽"):
+                rot.search("q")
+        tried_keys = [call.kwargs["json"]["api_key"] for call in m.call_args_list]
+        self.assertEqual(len(tried_keys), len(set(tried_keys)), f"重复尝试了同一个 key: {tried_keys}")
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
