@@ -16,7 +16,9 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--json", action="store_true", help="输出原始 JSON")
     args = parser.parse_args(argv)
 
-    data = get_rotator().search(args.query, max_results=args.max_results)
+    # CLI 是一次性进程:跳过启动校准(每条命令都探测所有 key 不划算),
+    # 直接搜索,由 403 自愈机制兜底
+    data = get_rotator(startup_probe=False).search(args.query, max_results=args.max_results)
 
     if args.json:
         print(json.dumps(data, ensure_ascii=False, indent=2))
