@@ -19,10 +19,10 @@
 ## 特性
 
 - **用量感知轮换**:根据每次请求的 `search_cost` 本地记账,优先选剩余额度最多的 key
-- **自动容错**:某个 key 配额耗尽(403)自动切换;触发限流(429)明确报错
-- **懒探测**:24 小时门控下用 `/usage` 检查耗尽的 key 是否已进入新配额周期,自动重新启用
+- **自动容错**:某个 key 配额耗尽(403)自动切换并继续尝试其余 key;触发限流(429)明确报错
+- **用量校准**:以 Tavily `/usage` 为权威数据源,事件驱动校准——首搜前并行探测(可关)、余额逼近阈值时确认真值、403 后 24 小时门控懒探测恢复
 - **全耗尽抢跑**:所有 key 都用完时,立即探测最早耗尽的 key
-- **状态持久化**:记录存在 `~/.tavily_rotator/tavily_usage.json`,重启不丢
+- **无状态文件**:不持久化任何数据,没有跨进程并发写问题;多设备共用 key 也无需担心账本漂移
 - **线程安全**:内部用锁保护状态,可安全并发调用
 - **CLI 命令行**(接入任意 agent 的示例见 [接入 LangChain](#接入-langchain);更多可运行脚本见 [examples/](examples/))
 
@@ -62,20 +62,21 @@ rot = get_rotator(keys=["tvly-key1", "tvly-key2", "tvly-key3"])
 
 ## 进阶:独立实例
 
-可以直接构造 `TavilyRotator`, 例如测试隔离、多组互不干扰的 key 池、自定义状态文件或配额:
+可以直接构造 `TavilyRotator`, 例如测试隔离、多组互不干扰的 key 池或自定义配额:
 
 ```python
 from tavily_rotator import TavilyRotator
 
 rot = TavilyRotator(
     keys=["tvly-key1", "tvly-key2", "tvly-key3"],
-    data_file="/tmp/test_usage.json",  # 默认 ~/.tavily_rotator/tavily_usage.json
     limit=100,  # 默认 1000;也可传 {"tvly-key1": 1000, "tvly-key2": 5000} 按 key 单独指定
+    startup_probe=True,  # 首搜前调 /usage 校准各 key 用量;一次性脚本可传 False
 )
 data = rot.search("今天上海天气")
+print(rot.usage())  # {"tvly-key1": {"used": 1, "limit": 100, "remaining": 99, ...}}
 ```
 
-注意:每个实例各自持锁、构造时重新读盘,多个实例间不共享记账,普通使用请勿重复创建。
+注意:每个实例各自持锁、互不共享记账,普通使用请勿重复创建。
 
 ## 在 LangChain 中使用示例
 
@@ -129,27 +130,27 @@ tavily-search "今天上海天气" --json
 | 项 | 说明 |
 |---|---|
 | `keys` | key 列表(必填) |
-| `data_file` | 状态文件路径,默认 `~/.tavily_rotator/tavily_usage.json` |
 | `limit` | 配额上限,默认 1000;传 `{key: limit}` dict 可按 key 单独指定 |
+| `startup_probe` | 首搜前并行调 `/usage` 校准所有 key(默认开)。常驻进程建议开;一次性脚本/CLI 建议关,靠 403 自愈 |
 
 ## 如何工作
 
 1. 每次搜索,按"剩余额度最多 + 最近未使用"的原则挑选 key
-2. 响应里的 `search_cost` 累加到本地计数
-3. 返回 403 说明该 key 配额耗尽 → 标记并切换下一个
-4. 每 24 小时懒探测一次耗尽的 key,配额周期刷新后自动恢复
+2. 响应里的 `search_cost` 累加到**内存**计数(仅用于排序,尽力而为)
+3. 用量校准按需发生,以 Tavily `/usage` 为准:
+   - **首搜前**并行探测所有 key(`startup_probe=False` 可关)
+   - **余额 < 配额 10%** 时确认真值(60 秒节流,失败静默降级)
+   - 返回 403 说明该 key 配额耗尽 → 标记并继续尝试其余 key,直到成功或试穿候选池
+4. 耗尽的 key 每 24 小时懒探测一次,配额周期刷新后自动恢复;全部耗尽时立即抢跑探测
 
-状态文件示例(`~/.tavily_rotator/tavily_usage.json`):
+进程退出后内存计数即消失,下次进程的用量认知由启动校准或 403 自愈重建——本地不存任何文件。
 
-```json
-{
-  "keys": {
-    "tvly-key1": {"used": 340, "exhausted": false, "last_probe_at": 1697000000.0, "last_used_at": 1697000100.0}
-  }
-}
+查看实时用量(本地估计,非精确账单):
+
+```python
+rot.usage()
+# {"tvly-key1": {"used": 340, "exhausted": False, "limit": 1000, "remaining": 660}}
 ```
-
-删除该文件即可重置计数。
 
 ## 示例
 
@@ -169,9 +170,14 @@ python examples/basic_search.py   # 运行前先 export TAVILY_SEARCH_KEYS=...
 ## 注意
 
 - 请确保你有权使用所配置的 API key,并遵守对应服务商的[服务条款](https://docs.tavily.com)与用量政策。
-- 本地计数只统计本程序的使用量;若同一 key 被其他程序使用,以 Tavily 官方用量为准(`/usage` 探测会校准)。
+- 本地计数只统计本程序的使用量,且仅用于选 key 的排序;精确用量以 Tavily 官方为准(`/usage` 校准会自动对齐)。
+- 多设备/多程序共用同一 key 时,本地计数彼此不可见,可能出现多耗一两次 403 的情况——这是设计内的行为,不损失配额。
 - 各 key 默认约 1 请求/秒,内置 1.1 秒冷却以避免触发限流。
-- 状态文件默认全项目共享(配额属于 key 而非项目);需要项目级隔离时,用 `TavilyRotator(data_file=...)` 各存各的。
+
+### 从 0.1.x 升级
+
+- `TavilyRotator` 不再接受 `data_file` 参数,`DEFAULT_DATA_FILE` 已移除:库不再读写任何状态文件
+- 旧的 `~/.tavily_rotator/tavily_usage.json` 可以直接删除,不再使用
 
 ## 许可证
 

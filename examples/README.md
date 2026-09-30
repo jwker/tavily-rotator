@@ -4,10 +4,9 @@
 
 | 文件 | 需要联网 | 说明 |
 |---|---|---|
-| [basic_search.py](basic_search.py) | 是 | 快速开始:环境变量配 key,`get_rotator()` 单例搜索 |
+| [basic_search.py](basic_search.py) | 是 | 快速开始:环境变量配 key,`get_rotator()` 单例搜索 + 用量视图 |
 | [concurrent_search.py](concurrent_search.py) | 是 | 线程安全演示:多线程并发搜索,记账不串账 |
-| [custom_instance.py](custom_instance.py) | 否* | 进阶:直接构造 `TavilyRotator`,自定义状态文件与按 key 配额 |
-| [check_usage.py](check_usage.py) | 否 | 查看本地用量账本(状态文件),不发网络请求 |
+| [custom_instance.py](custom_instance.py) | 否* | 进阶:直接构造 `TavilyRotator`,按 key 配额、启动校准开关 |
 
 `*` 填入真实 key 并取消搜索注释后才会联网。
 
@@ -39,7 +38,7 @@ from tavily_rotator import get_rotator
 try:
     data = get_rotator().search("今天上海天气")
 except RuntimeError as e:
-    # 403 耗尽的 key 已被自动跳过并重试,走到这里说明:
-    # 网络失败 / 触发 429 限流 / 所有 key 均耗尽
+    # 403 耗尽的 key 会被自动跳过并继续尝试其余 key,
+    # 走到这里说明:网络失败 / 触发 429 限流 / 所有 key 均耗尽
     print(f"搜索失败: {e}")
 ```

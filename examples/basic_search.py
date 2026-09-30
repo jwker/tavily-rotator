@@ -23,6 +23,9 @@ def main() -> None:
         print(f"  {r.get('url', '')}")
         print(f"  {r.get('content', '')[:100]}\n")
 
+    for key, u in rot.usage().items():  # 本地用量估计(尽力而为,非精确账单)
+        print(f"[{key[:8]}…] 已用 {u['used']}/{u['limit']},剩余 {u['remaining']}")
+
 
 if __name__ == "__main__":
     main()
